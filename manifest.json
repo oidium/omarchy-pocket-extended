@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "id": "io.github.oidium.pocket-extended",
+  "name": "Pocket Extended - KDE Connect Bar",
+  "version": "1.0.0-rc.1",
+  "author": "Oidium",
+  "description": "Keep your phone in your pocket. A theme-matching KDE Connect bar panel for device controls, notification replies, SMS/MMS conversations and call events. Manual setup required.",
+  "kinds": [
+    "service",
+    "bar-widget"
+  ],
+  "keepLoaded": true,
+  "entryPoints": {
+    "service": "Service.qml",
+    "barWidget": "Panel.qml"
+  },
+  "barWidget": {
+    "displayName": "Pocket Extended",
+    "description": "KDE Connect phone panel with automatic Omarchy theme matching",
+    "category": "Network",
+    "allowMultiple": false,
+    "defaultSection": "right"
+  },
+  "license": "MIT",
+  "homepage": "https://github.com/oidium/omarchy-pocket-extended"
+}
