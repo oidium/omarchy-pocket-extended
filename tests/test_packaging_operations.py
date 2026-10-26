@@ -2,15 +2,17 @@
 
 The tests patch only PLUGINS_DIR in copied host scripts. All plugin paths, local
 Git origins, and the external state sentinel live below a TemporaryDirectory.
-The test never invokes the scripts against the user's installed plugin.
+The test never invokes the scripts against the user's installed plugin. The lifecycle stub models enabled/disabled keepLoaded ownership and asserts disable/update/validate/enable ordering; it is not Omarchy production code.
 """
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 import tempfile
 import unittest
 
@@ -61,11 +63,43 @@ class PackagingOperationsTests(unittest.TestCase):
         self.state_file.parent.mkdir(parents=True)
         self.state_file.write_text('{"fixture":"external-state-sentinel"}\n')
         self.state_hash = self.digest(self.state_file)
+        self.lifecycle_file = self.root / "service-lifecycle.json"
+        self.lifecycle_file.write_text(json.dumps({
+            "enabled": True,
+            "owner": "old-service-1",
+            "owners_created": 1,
+            "owners_destroyed": 0,
+        }))
         self.git_config = self.root / "empty-git-config"
         self.git_config.touch()
         self._stub("omarchy-git-url-check", "exit 0\n")
         self._stub("omarchy-plugin-catalog", "printf '[]\\n'\n")
-        self._stub("omarchy-shell", "printf 'ok\\n'\n")
+        shell_stub = self.root / "service-lifecycle-stub.py"
+        lifecycle_source = "\n".join([
+            "import json, pathlib, sys",
+            "state_path = pathlib.Path(sys.argv[1])",
+            "args = sys.argv[2:]",
+            "state = json.loads(state_path.read_text())",
+            "if len(args) < 2 or args[0] != 'shell': raise SystemExit('unexpected shell IPC')",
+            "method = args[1]",
+            "if method == 'setPluginEnabled' and args[-1] == 'false':",
+            " state['enabled'] = False",
+            " if state['owner'] is not None:",
+            "  state['owner'] = None; state['owners_destroyed'] += 1",
+            "elif method == 'rescanPlugins':",
+            " pass  # keepLoaded owner survives a rescan",
+            "elif method == 'enablePlugin':",
+            " state['enabled'] = True",
+            " if state['owner'] is None:",
+            "  state['owners_created'] += 1",
+            "  state['owner'] = 'service-owner-' + str(state['owners_created'])",
+            "else: raise SystemExit('unexpected shell method: ' + method)",
+            "state_path.write_text(json.dumps(state))",
+            "print('ok')",
+            "",
+        ])
+        shell_stub.write_text(lifecycle_source)
+        self._stub("omarchy-shell", f"exec {sys.executable} {shell_stub} {self.lifecycle_file} \"$@\"\n")
         self._copy_host_script("omarchy-plugin-add", self.host_add)
         self._copy_host_script("omarchy-plugin-update", self.host_update)
         for name, source in (("omarchy-plugin-disable", self.host_disable),
@@ -165,9 +199,53 @@ class PackagingOperationsTests(unittest.TestCase):
         git(producer, "commit", "-m", "fixture fast-forward", env={"GIT_CONFIG_GLOBAL": str(self.git_config)})
         git(producer, "push", "origin", "HEAD:main", env={"GIT_CONFIG_GLOBAL": str(self.git_config)})
 
+        # The previous keepLoaded Service must be gone before files change.
+        self._run("omarchy-plugin-disable", PLUGIN_ID)
+        disabled = json.loads(self.lifecycle_file.read_text())
+        self.assertFalse(disabled["enabled"])
+        self.assertIsNone(disabled["owner"])
+        self.assertEqual(disabled["owners_destroyed"], 1)
         self._run("omarchy-plugin-update", PLUGIN_ID, "--yes")
         self.assertEqual((active / "manager-fixture-update.txt").read_text(), "fast-forward fixture\n")
-        self.assertEqual(git(active, "rev-parse", "HEAD"), git(bare, "rev-parse", "refs/heads/main"))
+        expected = git(bare, "rev-parse", "refs/heads/main")
+        self.assertEqual(git(active, "rev-parse", "HEAD"), expected)
+        after_update = json.loads(self.lifecycle_file.read_text())
+        self.assertFalse(after_update["enabled"])
+        self.assertIsNone(after_update["owner"])
+        self._run("omarchy-plugin-validate", str(active))
+        self.assertEqual(git(active, "rev-parse", "HEAD"), expected)
+        self._run("omarchy-plugin-enable", PLUGIN_ID)
+        enabled = json.loads(self.lifecycle_file.read_text())
+        self.assertTrue(enabled["enabled"])
+        self.assertEqual(enabled["owner"], "service-owner-2")
+        self.assertEqual(enabled["owners_destroyed"], 1)
+        self.assertEqual(enabled["owners_created"], 2)
+
+    def test_validation_failure_after_update_leaves_service_disabled(self) -> None:
+        bare = self._make_bare_origin(self.root / "invalid-update-origin.git")
+        active = self.plugins / PLUGIN_ID
+        producer = self.root / "invalid-update-producer"
+        git(None, "clone", str(ROOT), str(active), env={"GIT_CONFIG_GLOBAL": str(self.git_config)})
+        git(active, "remote", "set-url", "origin", str(bare))
+        git(None, "clone", str(ROOT), str(producer), env={"GIT_CONFIG_GLOBAL": str(self.git_config)})
+        git(producer, "remote", "set-url", "origin", str(bare))
+        old_head = git(active, "rev-parse", "HEAD")
+        (producer / "manifest.json").write_text("{ invalid manifest\n")
+        git(producer, "add", "manifest.json")
+        git(producer, "commit", "-m", "invalid disposable manifest", env={"GIT_CONFIG_GLOBAL": str(self.git_config)})
+        git(producer, "push", "origin", "HEAD:main", env={"GIT_CONFIG_GLOBAL": str(self.git_config)})
+
+        self._run("omarchy-plugin-disable", PLUGIN_ID)
+        self._run("omarchy-plugin-update", PLUGIN_ID, "--yes", ok=False)
+        self.assertEqual(git(active, "rev-parse", "HEAD"), old_head)
+        lifecycle = json.loads(self.lifecycle_file.read_text())
+        self.assertFalse(lifecycle["enabled"])
+        self.assertIsNone(lifecycle["owner"])
+        self.assertEqual(lifecycle["owners_destroyed"], 1)
+        self.assertEqual(lifecycle["owners_created"], 1)
+        self._run("omarchy-plugin-validate", str(active))
+        # Failure handling intentionally does not re-enable the previous owner.
+        self.assertIsNone(json.loads(self.lifecycle_file.read_text())["owner"])
 
     def test_unrelated_git_history_is_not_fast_forwarded(self) -> None:
         bare = self._make_bare_origin(self.root / "independent-public-root.git")

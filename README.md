@@ -22,7 +22,7 @@ Runtime requirements for the tested setup are Omarchy with Quickshell, Qt 6 and 
 
 The independently reviewed host environment was Omarchy `4.0.4-1`, Quickshell `0.3.1-1`, Qt base `6.11.2-3`, KDE Connect desktop `26.08.0-1`, and PyGObject `3.56.3-1`. These are the versions tested, not minimum supported versions. Android/KDE Connect app compatibility beyond the controlled test setup is not established. Other distributions, versions and devices have not been validated as a matrix; iPhone support is untested.
 
-The Files feature is optional and requires host `sshfs`, `kio-fuse`, Nautilus, Omarchy's `omarchy-file-select`, and compatible KDE Connect file-browsing setup. Plugin installation does not install packages, pair devices or grant permissions.
+File integration is optional. Sending files and selecting SMS/MMS attachments requires Omarchy's `omarchy-file-select`; plain SMS and notifications do not. Browsing files on the phone additionally requires host `sshfs`, `kio-fuse`, Nautilus and compatible KDE Connect file-browsing setup. Plugin installation does not install packages, pair devices or grant permissions.
 
 ## Pairing and permissions
 

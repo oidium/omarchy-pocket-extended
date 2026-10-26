@@ -8,7 +8,7 @@ Install KDE Connect desktop on Omarchy and the KDE Connect app on Android using 
 
 Enable only the KDE Connect plugins you need. SMS/MMS features require the Android app's SMS permission and SMS plugin; contact names require Contacts permission and contact synchronization. Notification forwarding requires enabling Notification Sync and granting KDE Connect Android's notification access in Android Settings. Android labels and permission prompts vary by version. KDE's [Android permission explanation](https://community.kde.org/KDEConnect/PrivacyPolicy#Android_permissions) describes why the app requests each permission. Pocket Extended does not grant these permissions itself.
 
-The Files integration is optional. It requires the host's `sshfs`, `kio-fuse`, Nautilus and Omarchy's `omarchy-file-select`, plus the corresponding KDE Connect file-browsing setup on the phone. Those are not required for notifications or messaging. Python 3, PyGObject/Gio, GLib, KDE Connect desktop, Quickshell, Qt 6 and Omarchy's `qs.Commons`/`qs.Ui` modules are runtime requirements for the tested setup.
+File integration is optional. Sending files and selecting SMS/MMS attachments requires Omarchy's `omarchy-file-select`; plain SMS and notifications do not. Browsing files on the phone additionally requires host `sshfs`, `kio-fuse`, Nautilus and the corresponding KDE Connect file-browsing setup on the phone. Python 3, PyGObject/Gio, GLib, KDE Connect desktop, Quickshell, Qt 6 and Omarchy's `qs.Commons`/`qs.Ui` modules are runtime requirements for the tested setup.
 
 ## Before changing an installation
 
@@ -38,7 +38,16 @@ if test -f "$STATE_FILE"; then
 fi
 ```
 
-Keep the backup until the replacement has been validated and the user state is confirmed. Do not put it below `~/.config/omarchy/plugins`; the plugin scanner must see only one active directory for this ID.
+Verify the copy before continuing, and keep it outside `~/.config/omarchy/plugins` so the scanner sees only one active directory for this ID:
+
+```sh
+diff -qr -- "$PLUGIN_DIR" "$BACKUP_ROOT/plugin"
+if test -f "$STATE_FILE"; then
+  cmp -- "$STATE_FILE" "$BACKUP_ROOT/notification-removals-v1.json"
+fi
+```
+
+Stop if either comparison fails. Keep the verified backup until the replacement has been validated and the user state is confirmed.
 
 ## 1. Fresh installation: plugin ID absent
 
@@ -61,15 +70,24 @@ If the commit is not the reviewed commit, leave it disabled and remove/restore i
 
 ## 2. Update: existing Git install from the same public lineage
 
-This procedure is for an installation whose `.git` checkout uses the same public repository as `origin` and whose current commit can fast-forward to that remote's default `HEAD`. Back up the plugin and state as above and resolve pending actions first. Review the diff when the manager prompts, then run:
+This procedure is for an installation whose `.git` checkout uses the same public repository as `origin` and whose current commit can fast-forward to that remote's default `HEAD`. Save unsent drafts, resolve pending sends/file pickers, and do not replay an action with an uncertain outcome. Make and verify the complete plugin and external-state backup above. Pocket's manifest sets `keepLoaded: true`: a plugin rescan alone retains the existing Service and worker. Successfully disable Pocket first so Omarchy destroys that Service before changing its files. If disable fails, stop and do not update.
 
 ```sh
+omarchy plugin disable "$PLUGIN_ID"
 omarchy plugin update "$PLUGIN_ID"
-omarchy plugin validate "$PLUGIN_DIR"
 git -C "$PLUGIN_DIR" rev-parse HEAD
+omarchy plugin validate "$PLUGIN_DIR"
 ```
 
-The reviewed manager runs `git fetch origin HEAD` and `git merge --ff-only FETCH_HEAD`. It follows the remote's default `HEAD`, does not accept a ref/version selector, and may therefore advance beyond a particular release if that default branch has moved. It refuses non-Git directories and unrelated/non-fast-forward history. Do not use this command to migrate the currently installed manual/private V6 or an unrelated Git checkout.
+Compare the printed commit to the exact reviewed commit before enabling. Only after the update succeeds, the expected commit matches and validation succeeds, enable Pocket:
+
+```sh
+omarchy plugin enable "$PLUGIN_ID"
+```
+
+If the update or validation fails, leave Pocket disabled. The manager rolls back a merged commit if its validation fails, but fetch/merge failures can also leave the old files in place; neither outcome should be enabled without review. Diagnose or follow the verified backup/restore procedure in section 5. Do not retry an uncertain send.
+
+The reviewed manager runs `git fetch origin HEAD` and `git merge --ff-only FETCH_HEAD`. It follows the remote's default `HEAD`, does not accept a ref/version selector, and may therefore advance beyond a particular release if that default branch has moved. It refuses non-Git directories and unrelated/non-fast-forward history. Do not use this command to migrate the currently installed manual/private V6 or an unrelated Git checkout. Updating while disabled and enabling after validation gives the new code a fresh Service/worker owner; a rescan alone does not restart a `keepLoaded` Service.
 
 ## 3. Migration: manual/non-Git installation, including private V6
 
@@ -80,7 +98,7 @@ omarchy plugin disable "$PLUGIN_ID"
 mv -- "$PLUGIN_DIR" "$BACKUP_ROOT/disabled-plugin"
 ```
 
-After public release approval, add the reviewed public repository without `--enable` so you can inspect the commit first:
+After public release approval, add the reviewed public repository. In an interactive run, explicitly answer **No** to the prompt asking whether to enable the plugin; omitting `--enable` does not suppress that prompt. Inspect the commit before enabling:
 
 ```sh
 omarchy plugin add https://github.com/oidium/omarchy-pocket-extended.git
@@ -88,7 +106,7 @@ git -C "$PLUGIN_DIR" rev-parse HEAD
 omarchy plugin validate "$PLUGIN_DIR"
 ```
 
-Compare the printed commit with the exact commit approved for that release. Only then enable it:
+Compare the printed commit with the exact commit approved for that release and validate it. Only then enable it:
 
 ```sh
 omarchy plugin enable "$PLUGIN_ID"

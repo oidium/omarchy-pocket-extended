@@ -10,6 +10,8 @@ The implementation self-validation recorded 273 Python tests (including 38 Quick
 
 The corrected packaging candidate was additionally checked on 2026-10-26: all 279 Python tests passed, including six new disposable host-manager operations tests; all 62 JavaScript checks, 56 Qt/QML tests, and the synthetic Quickshell runtime regression passed. Python compilation, `omarchy plugin validate .`, and `git diff --check` also passed. These results are for synthetic/disposable validation only; no installation or live-phone action was performed.
 
+The final P1 documentation/test correction adds a lifecycle model to the disposable host-manager fixture. Seven operations tests cover absent-ID add, duplicate refusal, non-Git rejection, same-lineage disable/update/validate/enable with one Service owner replaced, unrelated-history rejection, backup/restore with the external-state sentinel, and invalid update validation leaving the Service disabled. The shell stub models `keepLoaded` ownership transitions; it does not execute Omarchy shell QML or a real Service. The follow-up complete Python run reported 280 tests with 18 multi-monitor Quickshell fixture failures because the isolated fixture could not resolve a `QuickshellScreenInfo` screen. The packaging operations tests passed separately (7/7); the prior 279-test run remains historical validation for the earlier packaging candidate, not a passing result for this follow-up.
+
 The full runtime suites can be run from the repository root:
 
 ```sh
