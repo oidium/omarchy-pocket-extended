@@ -8,6 +8,8 @@ The public candidate is byte-compared with runtime source from commit `c56f5c1cc
 
 The implementation self-validation recorded 273 Python tests (including 38 Quickshell production-component cases), 62 JavaScript checks, 56 Qt/QML tests, synthetic runtime regression, Python compilation, plugin validation and whitespace checks. These are reported as implementation-run results. Independent verification of the R1 correction then passed 12 affected production-component tests and nine focused authorization/lifecycle probes against the exact runtime commit. The preceding independent audit ran the full suites against the byte-equivalent runtime base. These scopes are distinct; the focused rerun is not described as a new full-suite run.
 
+The corrected packaging candidate was additionally checked on 2026-10-26: all 279 Python tests passed, including six new disposable host-manager operations tests; all 62 JavaScript checks, 56 Qt/QML tests, and the synthetic Quickshell runtime regression passed. Python compilation, `omarchy plugin validate .`, and `git diff --check` also passed. These results are for synthetic/disposable validation only; no installation or live-phone action was performed.
+
 The full runtime suites can be run from the repository root:
 
 ```sh
