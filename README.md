@@ -65,3 +65,12 @@ The optional `tools/preview.py` utility renders the real Panel with synthetic da
 ## License
 
 MIT. See [LICENSE](LICENSE) and [third-party notices](THIRD_PARTY_NOTICES.md).
+
+## Screenshots
+
+These screenshots show the actual Pocket Extended interface with synthetic demonstration data. They are interface examples and do not indicate that the depicted phone actions were performed. See the [screenshots directory](docs/screenshots/) for the full set:
+
+- [Notifications](docs/screenshots/pocket-notifications.png)
+- [Messaging history](docs/screenshots/pocket-history.png)
+- [Conversation](docs/screenshots/pocket-conversation.png)
+- [New message](docs/screenshots/pocket-new-message.png)
